@@ -19,6 +19,7 @@
 #include <dlaf/eigensolver/eigensolver.h>
 #include <dlaf/matrix/matrix.h>
 #include <dlaf/matrix/matrix_mirror.h>
+#include <dlaf/matrix/print_numpy.h>
 #include <dlaf/types.h>
 #include <dlaf_c/desc.h>
 #include <dlaf_c/grid.h>
@@ -53,6 +54,12 @@ int hermitian_eigensolver(const int dlaf_context, const char uplo, T* a,
   auto eigenvalues_host =
       dlaf::matrix::createMatrixFromColMajor<dlaf::Device::CPU>({dlaf_descz.m, 1}, {dlaf_descz.mb, 1},
                                                                 std::max(dlaf_descz.m, 1), w);
+
+  std::ofstream fmat("mat.py");
+  dlaf::matrix::print(dlaf::format::numpy{}, "a", matrix_host, fmat);
+  dlaf::matrix::print(dlaf::format::numpy{}, "evals", eigenvalues_host, fmat);
+  dlaf::matrix::print(dlaf::format::numpy{}, "evecs", eigenvectors_host, fmat);
+  fmat.close();
 
   {
     MatrixMirror matrix(matrix_host);
