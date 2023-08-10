@@ -25,6 +25,7 @@
 #include <dlaf/eigensolver/tridiag_solver/merge.h>
 #include <dlaf/lapack/tile.h>
 #include <dlaf/matrix/copy_tile.h>
+#include <dlaf/matrix/print_numpy.h>
 #include <dlaf/permutations/general.h>
 #include <dlaf/permutations/general/impl.h>
 #include <dlaf/sender/make_sender_algorithm_overloads.h>
@@ -188,6 +189,10 @@ void offloadDiagonal(Matrix<const T, Device::CPU>& tridiag, Matrix<T, D>& evals)
 template <Backend B, Device D, class T>
 void TridiagSolver<B, D, T>::call(Matrix<T, Device::CPU>& tridiag, Matrix<T, D>& evals,
                                   Matrix<T, D>& evecs) {
+  std::ofstream fmatin(std::string("matin_td.py"));
+  dlaf::matrix::print(dlaf::format::numpy{}, "a_td", tridiag, fmatin);
+  fmatin.close();
+
   // Quick return for empty matrix
   if (evecs.size().isEmpty())
     return;
