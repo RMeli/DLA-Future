@@ -153,6 +153,13 @@ struct TridiagSolverMiniapp {
         elapsed_time = timeit.elapsed();
       }
 
+#ifdef DLAF_WITH_HDF5
+      auto fevecs = FileHDF5(comm_grid.fullCommunicator(), "td-evecs.h5");
+      fevecs.write(evecs, "/evecs");
+      auto fevals = FileHDF5(comm_grid.fullCommunicator(), "td-evals.h5");
+      fevals.write(evals, "/evals");
+#endif
+
       // print benchmark results
       if (0 == world.rank() && run_index >= 0)
         std::cout << "[" << run_index << "]"
