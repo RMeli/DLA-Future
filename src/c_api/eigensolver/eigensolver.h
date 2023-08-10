@@ -55,24 +55,34 @@ int hermitian_eigensolver(const int dlaf_context, const char uplo, T* a,
       dlaf::matrix::createMatrixFromColMajor<dlaf::Device::CPU>({dlaf_descz.m, 1}, {dlaf_descz.mb, 1},
                                                                 std::max(dlaf_descz.m, 1), w);
 
-  std::ofstream fmat("mat.py");
-  dlaf::matrix::print(dlaf::format::numpy{}, "a", matrix_host, fmat);
-  dlaf::matrix::print(dlaf::format::numpy{}, "evals", eigenvalues_host, fmat);
-  dlaf::matrix::print(dlaf::format::numpy{}, "evecs", eigenvectors_host, fmat);
-  fmat.close();
+  auto rank = communicator_grid.fullCommunicator().rank();
+
+  std::ofstream fmatin(std::string("matin_") + std::to_string(rank) + std::string(".py"));
+  dlaf::matrix::print(dlaf::format::numpy{}, "a", matrix_host, fmatin);
+  dlaf::matrix::print(dlaf::format::numpy{}, "evals", eigenvalues_host, fmatin);
+  dlaf::matrix::print(dlaf::format::numpy{}, "evecs", eigenvectors_host, fmatin);
+  fmatin.close();
 
   {
     MatrixMirror matrix(matrix_host);
     MatrixMirror eigenvectors(eigenvectors_host);
     MatrixBaseMirror eigenvalues(eigenvalues_host);
 
+    // dlaf::eigensolver::eigensolver<dlaf::Backend::Default, dlaf::Device::Default, T>(
+    //     communicator_grid, blas::char2uplo(uplo), matrix.get(), eigenvalues.get(), eigenvectors.get());
     dlaf::eigensolver::eigensolver<dlaf::Backend::Default, dlaf::Device::Default, T>(
-        communicator_grid, blas::char2uplo(uplo), matrix.get(), eigenvalues.get(), eigenvectors.get());
+        blas::char2uplo(uplo), matrix.get(), eigenvalues.get(), eigenvectors.get());
   }  // Destroy mirror
 
   // Ensure data is copied back to the host
   eigenvalues_host.waitLocalTiles();
   eigenvectors_host.waitLocalTiles();
+
+  std::ofstream fmatout(std::string("matout_") + std::to_string(rank) + std::string(".py"));
+  dlaf::matrix::print(dlaf::format::numpy{}, "a", matrix_host, fmatout);
+  dlaf::matrix::print(dlaf::format::numpy{}, "evals", eigenvalues_host, fmatout);
+  dlaf::matrix::print(dlaf::format::numpy{}, "evecs", eigenvectors_host, fmatout);
+  fmatout.close();
 
   pika::suspend();
   return 0;
