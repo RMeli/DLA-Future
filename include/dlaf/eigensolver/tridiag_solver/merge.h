@@ -409,6 +409,24 @@ auto applyDeflation(const SizeType i_begin, const SizeType i_end, RhoSender&& rh
 
   const SizeType n = problemSize(i_begin, i_end, index.distribution());
 
+  TileCollector tc{i_begin, i_end};
+
+  // auto debug_fn = [n](auto index_tiles_futs, auto d_tiles) {
+  //   const TileElementIndex zero_idx(0, 0);
+  //   const SizeType* i_ptr = index_tiles_futs[0].get().ptr(zero_idx);
+  //   const T* d_ptr = d_tiles[0].get().ptr(zero_idx);
+
+  //   for (SizeType i = 1; i < n; ++i) {
+  //     if (d_ptr[i_ptr[i-1]] > d_ptr[i_ptr[i]]) {
+  //       [[maybe_unused]] bool unordered = true;
+  //     }
+  //   }
+  // };
+
+  // auto sender_debug = ex::when_all(ex::when_all_vector(tc.read(index)), ex::when_all_vector(tc.read(d)));
+
+  // pika::this_thread::experimental::sync_wait(di::transform(di::Policy<Backend::MC>(), std::move(debug_fn), std::move(sender_debug)));
+
   auto deflate_fn = [n](auto rho, auto tol, auto index_tiles_futs, auto d_tiles, auto z_tiles,
                         auto c_tiles) {
     const TileElementIndex zero_idx(0, 0);
@@ -418,8 +436,6 @@ auto applyDeflation(const SizeType i_begin, const SizeType i_end, RhoSender&& rh
     ColType* c_ptr = c_tiles[0].ptr(zero_idx);
     return applyDeflationToArrays(rho, tol, n, i_ptr, d_ptr, z_ptr, c_ptr);
   };
-
-  TileCollector tc{i_begin, i_end};
 
   auto sender = ex::when_all(std::forward<RhoSender>(rho), std::forward<TolSender>(tol),
                              ex::when_all_vector(tc.read(index)), ex::when_all_vector(tc.readwrite(d)),
@@ -518,6 +534,23 @@ void solveRank1Problem(const SizeType i_begin, const SizeType i_end, KSender&& k
             const SizeType i_col = distr.tileElementFromGlobalElement<Coord::Col>(to_SizeType(i));
             T* delta = evec_tiles[to_sizet(i_tile)].ptr(TileElementIndex(0, i_col));
 
+            auto d_ptr_is_sorted = std::is_sorted(d_ptr, d_ptr + k);
+            if (!d_ptr_is_sorted) {
+              for (int i = 0; i < k; i++) {
+                for (int j = i + 1; j < k; j++) {
+                  if (d_ptr[i] > d_ptr[j]) {
+                    [[maybe_unused]] auto d_i = d_ptr[i];
+                    [[maybe_unused]] auto d_j = d_ptr[j];
+                    continue;
+                  }
+                  //  DLAF_ASSERT(d_ptr[i] < d_ptr[j], i, j, d_ptr[i], d_ptr[j]);
+                }
+              }
+            }
+            // DLAF_ASSERT(d_ptr_is_sorted, d_ptr_is_sorted);
+            auto norm2_z = std::inner_product(z_ptr, z_ptr + k, z_ptr, 0.0);
+            [[maybe_unused]] auto norm_z = std::sqrt(norm2_z);
+            DLAF_ASSERT(rho > 0.0, rho);
             lapack::laed4(to_int(k), to_int(i), d_ptr, z_ptr, delta, rho, &eigenval);
           }
 
@@ -631,11 +664,41 @@ void solveRank1Problem(const SizeType i_begin, const SizeType i_end, KSender&& k
       }));
 }
 
+template <class T, Device D, class KSender>
+bool is_sorted(const SizeType i_begin, const SizeType i_end, KSender&& k, Matrix<const T, D>& mat, Matrix<const SizeType, D>& idx){
+  namespace ex = pika::execution::experimental;
+  namespace di = dlaf::internal;
+
+  const SizeType n = dlaf::eigensolver::internal::problemSize(i_begin, i_end, mat.distribution());
+
+   TileCollector tc{i_begin, i_end};
+
+  auto sender_debug = ex::when_all(std::forward<KSender>(k), ex::when_all_vector(tc.read<T, D>(mat)),
+                                   ex::when_all_vector(tc.read<SizeType, D>(idx)));
+
+  auto debug_fn = [n]([[maybe_unused]] const auto& k, const auto& mat, const auto& idx) {
+    const TileElementIndex zero_idx(0, 0);
+    const T* mat_ptr = mat[0].get().ptr(zero_idx);
+    const SizeType* idx_ptr = idx[0].get().ptr(zero_idx);
+
+    bool is_sorted = true;
+    for (SizeType i = 1; i < n; ++i) {
+      if (mat_ptr[idx_ptr[i - 1]] > mat_ptr[idx_ptr[i]]) {
+        is_sorted = false;
+      }
+    }
+    return is_sorted;
+  };
+  return pika::this_thread::experimental::sync_wait(
+      di::transform(di::Policy<DefaultBackend_v<D>>(), std::move(debug_fn), std::move(sender_debug)));
+}
+
 template <Backend B, Device D, class T, class RhoSender>
 void mergeSubproblems(const SizeType i_begin, const SizeType i_split, const SizeType i_end,
                       RhoSender&& rho, WorkSpace<T, D>& ws, WorkSpaceHost<T>& ws_h,
                       WorkSpaceHostMirror<T, D>& ws_hm) {
   namespace ex = pika::execution::experimental;
+  [[maybe_unused]] bool sorted = false;
 
   const GlobalTileIndex idx_gl_begin(i_begin, i_begin);
   const LocalTileIndex idx_loc_begin(i_begin, i_begin);
@@ -677,7 +740,10 @@ void mergeSubproblems(const SizeType i_begin, const SizeType i_split, const Size
   }
   addIndex(i_split, i_end, n1, ws_h.i1);
   sortIndex(i_begin, i_end, ex::just(n1), ws_h.d0, ws_h.i1, ws_hm.i2);
-
+  // sorted = is_sorted(i_begin, i_end, ex::just(n1), ws_h.d0, ws_hm.i2);
+  // if(not sorted){
+  //   is_sorted(i_begin, i_end, ex::just(n1), ws_h.d0, ws_hm.i2);
+  // }
   auto rots =
       applyDeflation(i_begin, i_end, scaled_rho, std::move(tol), ws_hm.i2, ws_h.d0, ws_hm.z0, ws_h.c);
 
@@ -729,7 +795,7 @@ void mergeSubproblems(const SizeType i_begin, const SizeType i_split, const Size
   //    i2 (out) : deflated <--- post_sorted
   //
   initIndex(i_begin, i_end, ws_h.i1);
-  sortIndex(i_begin, i_end, std::move(k), ws_h.d0, ws_h.i1, ws_hm.i2);
+  sortIndex(i_begin, i_end, k, ws_h.d0, ws_h.i1, ws_hm.i2);
   copy(idx_begin_tiles_vec, sz_tiles_vec, ws_hm.i2, ws_h.i1);
 }
 
@@ -913,8 +979,8 @@ void solveRank1ProblemDist(CommSender&& row_comm, CommSender&& col_comm, const S
           // - LAED4 requires working on k elements
           // - Weight computation requires working on m_subm_el_lc
           //
-          // and they are needed at two steps that cannot happen in parallel, we opted for allocating the
-          // workspace with the highest requirement of memory, and reuse them for both steps.
+          // and they are needed at two steps that cannot happen in parallel, we opted for allocating
+          // the workspace with the highest requirement of memory, and reuse them for both steps.
           const SizeType max_size = std::max(k, m_subm_el_lc);
           for (std::size_t i = 0; i < nthreads; ++i)
             ws_cols.emplace_back(max_size);
@@ -1308,7 +1374,7 @@ void mergeDistSubproblems(comm::CommunicatorGrid grid,
   matrix::util::set0<Backend::MC>(pika::execution::thread_priority::normal, idx_loc_begin, sz_loc_tiles,
                                   ws_hm.e2);
   solveRank1ProblemDist(row_task_chain(), col_task_chain(), i_begin, i_end, idx_loc_begin, sz_loc_tiles,
-                        k, std::move(scaled_rho), ws_hm.d1, ws_hm.z1, ws_h.d0, ws_hm.i2, ws_hm.e2);
+                        k, scaled_rho, ws_hm.d1, ws_hm.z1, ws_h.d0, ws_hm.i2, ws_hm.e2);
 
   // Step #3: Eigenvectors of the tridiagonal system: Q * U
   //
@@ -1324,7 +1390,7 @@ void mergeDistSubproblems(comm::CommunicatorGrid grid,
   //    i2 (out) : deflated <--- post_sorted
   //
   initIndex(i_begin, i_end, ws_h.i1);
-  sortIndex(i_begin, i_end, std::move(k), ws_h.d0, ws_h.i1, ws_hm.i2);
+  sortIndex(i_begin, i_end, k, ws_h.d0, ws_h.i1, ws_hm.i2);
   copy(idx_begin_tiles_vec, sz_tiles_vec, ws_hm.i2, ws_h.i1);
 }
 }

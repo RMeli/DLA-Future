@@ -89,10 +89,19 @@ void sortIndex(const SizeType i_begin, const SizeType i_end, KSender&& k, Matrix
     SizeType* out_index_ptr = out_index[0].ptr(zero_idx);
 
     auto begin_it = in_index_ptr;
-    auto split_it = in_index_ptr + k;
+    [[maybe_unused]] auto split_it = in_index_ptr + k;
     auto end_it = in_index_ptr + n;
     if constexpr (D == Device::CPU) {
       auto cmp = [v_ptr](const SizeType i1, const SizeType i2) { return v_ptr[i1] < v_ptr[i2]; };
+
+      // std::copy(begin_it, end_it, out_index_ptr);
+      // pika::sort(pika::execution::par, out_index_ptr, out_index_ptr + k, cmp);
+      // pika::sort(pika::execution::par, out_index_ptr + k, out_index_ptr + n, cmp);
+      // std::vector<T> tmp(to_sizet(n));
+      // std::copy(out_index_ptr, out_index_ptr + n, std::begin(tmp));
+      // pika::merge(pika::execution::par, tmp.data(), tmp.data() + k, tmp.data() + k, tmp.data() + n,
+      //             out_index_ptr, std::move(cmp));
+
       pika::merge(pika::execution::par, begin_it, split_it, split_it, end_it, out_index_ptr,
                   std::move(cmp));
     }
@@ -111,6 +120,25 @@ void sortIndex(const SizeType i_begin, const SizeType i_end, KSender&& k, Matrix
 
   ex::start_detached(di::transform(di::Policy<DefaultBackend_v<D>>(), std::move(sort_fn),
                                    std::move(sender)));
+
+  // auto sender_debug = ex::when_all(std::forward<KSender>(k), ex::when_all_vector(tc.read<T, D>(vec)),
+  //                                  ex::when_all_vector(tc.read<SizeType, D>(in_index)),
+  //                                  ex::when_all_vector(tc.read<SizeType, D>(out_index)));
+  // auto debug_fn = [n]([[maybe_unused]] const auto& k, const auto& vec_futs, const auto& in_index_futs,
+  //                     const auto& out_index, [[maybe_unused]] auto&&... ts) {
+  //   const TileElementIndex zero_idx(0, 0);
+  //   const T* v_ptr = vec_futs[0].get().ptr(zero_idx);
+  //   [[maybe_unused]] const SizeType* in_index_ptr = in_index_futs[0].get().ptr(zero_idx);
+  //   [[maybe_unused]] const SizeType* out_index_ptr = out_index[0].get().ptr(zero_idx);
+
+  //   for (SizeType i = 1; i < n; ++i) {
+  //     if (v_ptr[out_index_ptr[i - 1]] > v_ptr[out_index_ptr[i]]) {
+  //       [[maybe_unused]] bool unordered = true;
+  //     }
+  //   }
+  // };
+  // pika::this_thread::experimental::sync_wait(
+  //     di::transform(di::Policy<DefaultBackend_v<D>>(), std::move(debug_fn), std::move(sender_debug)));
 }
 
 // Applies `index` to `in` to get `out`
@@ -146,6 +174,23 @@ void applyIndex(const SizeType i_begin, const SizeType i_end, Matrix<const SizeT
                              ex::when_all_vector(tc.readwrite(out)));
   ex::start_detached(di::transform(di::Policy<DefaultBackend_v<D>>(), std::move(applyIndex_fn),
                                    std::move(sender)));
+
+  // auto sender_debug = ex::when_all(ex::when_all_vector(tc.read(index)), ex::when_all_vector(tc.read(in)),
+  //                                  ex::when_all_vector(tc.read(out)));
+  // auto debug_fn = [n](const auto& index_futs, const auto& in_futs, const auto& out) {
+  //   const TileElementIndex zero_idx(0, 0);
+  //   [[maybe_unused]] const SizeType* i_ptr = index_futs[0].get().ptr(zero_idx);
+  //   [[maybe_unused]] const T* in_ptr = in_futs[0].get().ptr(zero_idx);
+  //   const T* out_ptr = out[0].get().ptr(zero_idx);
+
+  //   for (SizeType i = 1; i < n; ++i) {
+  //     if (out_ptr[i - 1] > out_ptr[i]) {
+  //       [[maybe_unused]] bool unordered = true;
+  //     }
+  //   }
+  // };
+  // pika::this_thread::experimental::sync_wait(
+  //     di::transform(di::Policy<DefaultBackend_v<D>>(), std::move(debug_fn), std::move(sender_debug)));
 }
 
 template <Device D>
