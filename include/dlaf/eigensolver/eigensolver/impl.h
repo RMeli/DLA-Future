@@ -33,14 +33,11 @@
 
 namespace dlaf::eigensolver::internal {
 
+
 template <Backend B, Device D, class T>
 void Eigensolver<B, D, T>::call(blas::Uplo uplo, Matrix<T, D>& mat_a, Matrix<BaseType<T>, D>& evals,
                                 Matrix<T, D>& mat_e) {
   const SizeType band_size = getBandSize(mat_a.blockSize().rows());
-
-#ifdef DLAF_WITH_HDF5
-  static size_t num_eigensolver_calls = 0;
-#endif
 
   // need uplo check as reduction to band doesn't have the uplo argument yet.
   if (uplo != blas::Uplo::Lower)
@@ -59,6 +56,10 @@ template <Backend B, Device D, class T>
 void Eigensolver<B, D, T>::call(comm::CommunicatorGrid grid, blas::Uplo uplo, Matrix<T, D>& mat_a,
                                 Matrix<BaseType<T>, D>& evals, Matrix<T, D>& mat_e) {
   const SizeType band_size = getBandSize(mat_a.blockSize().rows());
+
+#ifdef DLAF_WITH_HDF5
+  static size_t num_eigensolver_calls = 0;
+#endif
 
   // need uplo check as reduction to band doesn't have the uplo argument yet.
   if (uplo != blas::Uplo::Lower)
