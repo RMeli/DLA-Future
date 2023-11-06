@@ -83,7 +83,7 @@ void Eigensolver<B, D, T>::call(comm::CommunicatorGrid grid, blas::Uplo uplo, Ma
 
   if (getTuneParameters().debug_dump_reduction_to_band_data) {
     file_reduction_to_band =
-        matrix::internal::FileHDF5(grid.fullCommunicator(), fname("red_to_band.h5"));
+        matrix::internal::FileHDF5(grid.fullCommunicator(), fname("red_to_band"));
     file_reduction_to_band->write(mat_a, "/input");
   }
 #endif
@@ -99,7 +99,7 @@ void Eigensolver<B, D, T>::call(comm::CommunicatorGrid grid, blas::Uplo uplo, Ma
 
   if (getTuneParameters().debug_dump_band_to_tridiagonal_data) {
     file_band_to_tridiagonal =
-        matrix::internal::FileHDF5(grid.fullCommunicator(), fname("band_to_tridiag.h5"));
+        matrix::internal::FileHDF5(grid.fullCommunicator(), fname("band_to_tridiag"));
     file_band_to_tridiagonal->write(mat_a, "/band");
   }
 #endif
@@ -114,7 +114,7 @@ void Eigensolver<B, D, T>::call(comm::CommunicatorGrid grid, blas::Uplo uplo, Ma
   std::optional<matrix::internal::FileHDF5> file_tridiag;
 
   if (getTuneParameters().debug_dump_trisolver_data) {
-    file_tridiag = matrix::internal::FileHDF5(grid.fullCommunicator(), fname("tridiag.h5"));
+    file_tridiag = matrix::internal::FileHDF5(grid.fullCommunicator(), fname("tridiag"));
     file_tridiag->write(ret.tridiagonal, "/tridiag");
   }
 #endif
