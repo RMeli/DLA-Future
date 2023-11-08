@@ -74,7 +74,10 @@ void Eigensolver<B, D, T>::call(comm::CommunicatorGrid grid, blas::Uplo uplo, Ma
 
   std::optional<matrix::internal::FileHDF5> file_eigensolver;
 
+  std::cerr << "+----- DEBUG -----+ DLA-Future eigensolver with HDF5" << std::endl;
+
   if (getTuneParameters().debug_dump_eigensolver_data) {
+    std::cerr << "+----- DEBUG -----+ Dumping eigensolver data to HDF5" << std::endl;
     file_eigensolver = matrix::internal::FileHDF5(grid.fullCommunicator(), fname("eigensolver"));
     file_eigensolver->write(mat_a, "/input");
   }
