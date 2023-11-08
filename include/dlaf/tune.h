@@ -63,6 +63,9 @@ struct TuneParameters {
   // - updateConfiguration in init.cpp to update the value from command line options and environment
   //   values
   // - getOptionsDescription to add a corresponding command line option
+  bool debug_dump_eigensolver_data = false;
+  bool debug_dump_reduction_to_band_data = false;
+  bool debug_dump_band_to_tridiagonal_data = false;
   bool debug_dump_trisolver_data = false;
   std::size_t red2band_panel_nworkers =
       std::max<std::size_t>(1, pika::resource::get_thread_pool("default").get_os_thread_count() / 2);
