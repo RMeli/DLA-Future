@@ -14,7 +14,7 @@ find_package(PkgConfig REQUIRED)
 pkg_search_module(_SCALAPACK scalapack)
 
 find_library(
-  DLAF_SCALAPACK_LIBRARY NAME scalapack
+  SCALAPACK_LIBRARY NAME scalapack
   HINTS ${_SCALAPACK_LIBRARY_DIRS}
         ENV
         SCALAPACKROOT
@@ -26,16 +26,14 @@ find_library(
   PATH_SUFFIXES lib
 )
 
-find_package_handle_standard_args(DLAF_SCALAPACK DEFAULT_MSG DLAF_SCALAPACK_LIBRARY)
+find_package_handle_standard_args(SCALAPACK DEFAULT_MSG SCALAPACK_LIBRARY)
 
-mark_as_advanced(DLAF_SCALAPACK_LIBRARY)
-mark_as_advanced(DLAF_SCALAPACK_INCLUDE_DIR)
+mark_as_advanced(SCALAPACK_LIBRARY)
+mark_as_advanced(SCALAPACK_INCLUDE_DIR)
 
-if(DLAF_SCALAPACK_FOUND)
-  if(NOT TARGET DLAF::SCALAPACK)
-    add_library(DLAF::SCALAPACK INTERFACE IMPORTED GLOBAL)
-  endif()
-
-  target_link_libraries(DLAF::SCALAPACK INTERFACE "${DLAF_SCALAPACK_LIBRARY}")
-  target_include_directories(DLAF::SCALAPACK INTERFACE "${DLAF_SCALAPACK_INCLUDE_DIR}")
+if(NOT TARGET DLAF::SCALAPACK)
+  add_library(DLAF::SCALAPACK INTERFACE IMPORTED GLOBAL)
 endif()
+
+target_link_libraries(DLAF::SCALAPACK INTERFACE "${SCALAPACK_LIBRARY}")
+target_include_directories(DLAF::SCALAPACK INTERFACE "${SCALAPACK_INCLUDE_DIR}")
