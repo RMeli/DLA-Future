@@ -14,7 +14,7 @@ find_package(PkgConfig REQUIRED)
 pkg_search_module(_SCALAPACK scalapack)
 
 find_library(
-  DLAF_SCALAPACK_LIBRARY NAME scalapack
+  DLAF_SCALAPACK_LIBRARY NAMES scalapack
   HINTS ${_SCALAPACK_LIBRARY_DIRS}
         ENV
         SCALAPACKROOT
