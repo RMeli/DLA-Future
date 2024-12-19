@@ -1,5 +1,11 @@
 # Changelog
 
+## DLA-Future 0.7.2
+
+### Bug fixes
+
+- Changed C ScaLAPACK API indexing convention to 1-based for partial eigenspectrum. (#1248)
+
 ## DLA-Future 0.7.1
 
 ### Bug fixes
