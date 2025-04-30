@@ -56,6 +56,22 @@ const std::vector<TestSizes> sizes_tests({
     {{16, 24}, {3, 5}, {3, 5}},
 });
 
+struct TestRedistributionSizes {
+  GlobalElementSize size;
+  // Block and tile sizes of the source matrix
+  TileElementSize block_size;
+  TileElementSize tile_size;
+  // Block and tile sizes of the mirror matrix
+  TileElementSize block_size_mirror;
+  TileElementSize tile_size_mirror;
+};
+
+const std::vector<TestRedistributionSizes> sizes_redistribution_tests({
+    {{0, 0}, {10, 10}, {10, 10}, {20, 20}, {20, 20}},
+    {{20, 20}, {5, 5}, {5, 5}, {10, 10}, {10, 10}},
+    {{20, 20}, {10, 10}, {10, 10}, {5, 5}, {5, 5}},
+});
+
 GlobalElementSize globalTestSize(const LocalElementSize& size, const Size2D& grid_size) {
   return {size.rows() * grid_size.rows(), size.cols() * grid_size.cols()};
 }
@@ -329,6 +345,32 @@ TYPED_TEST(MatrixMirrorTest, DifferentDevicesDifferentMemory) {
     for (const auto& test : sizes_tests) {
       differentDeviceTest<TypeParam, Device::CPU, Device::GPU>(comm_grid, test);
       differentDeviceTest<TypeParam, Device::GPU, Device::CPU>(comm_grid, test);
+    }
+  }
+}
+
+template <typename T, Device Target, Device Source>
+void basicTestRedistribution(const CommunicatorGrid& comm_grid, const TestRedistributionSizes& test) {
+  Distribution dist(test.size, test.block_size, test.tile_size, comm_grid.size(), comm_grid.rank(),
+                    {0, 0});
+  Distribution dist_m(test.size, test.block_size_mirror, test.tile_size_mirror, comm_grid.size(),
+                      comm_grid.rank(), {0, 0});
+
+  Matrix<T, Source> mat(dist);
+
+  {
+    MatrixMirror<T, Target, Source> mat_mirror(mat, dist_m);
+    EXPECT_EQ(mat_mirror.get().distribution(), dist_m);
+  }
+
+  EXPECT_EQ(mat.distribution(), dist);
+}
+
+TYPED_TEST(MatrixMirrorTest, basicTestRedistribution) {
+  for (auto& comm_grid : this->commGrids()) {
+    for (const auto& test : sizes_redistribution_tests) {
+      basicTestRedistribution<TypeParam, Device::CPU, Device::GPU>(comm_grid, test);
+      basicTestRedistribution<TypeParam, Device::GPU, Device::CPU>(comm_grid, test);
     }
   }
 }

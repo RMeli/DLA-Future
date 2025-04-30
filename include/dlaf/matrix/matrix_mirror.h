@@ -113,6 +113,13 @@ public:
     copy(mat_source, mat_target);
   }
 
+  /// Create a mirror of the source matrix @p mat_source with distribution @p dist.
+  /// Creates a copy of the source matrix on the target device.
+  MatrixMirror(Matrix<const T, Source>& mat_source, const Distribution& dist)
+      : mat_target(dist), mat_source(mat_source) {
+    copy(mat_source, mat_target);
+  }
+
   /// Release the target matrix.
   virtual ~MatrixMirror() = default;
 
@@ -145,6 +152,11 @@ public:
   /// Create a mirror of the source matrix @p mat_source. Creates a copy of the
   /// source matrix on the target device.
   MatrixMirror(Matrix<T, Source>& mat_source) : base_type(mat_source), mat_source(mat_source) {}
+
+  /// Create a mirror of the source matrix @p mat_source with distribution @p dist.
+  /// Creates a copy of the source matrix on the target device.
+  MatrixMirror(Matrix<T, Source>& mat_source, const Distribution& dist)
+      : base_type(mat_source, dist), mat_source(mat_source) {}
 
   /// Copy the target matrix back to the source matrix and release the target
   /// matrix.
