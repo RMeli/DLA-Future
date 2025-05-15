@@ -104,6 +104,7 @@ class MatrixMirror<const T, Target, Source> {
 protected:
   Matrix<T, Target> mat_target;
   Matrix<const T, Source>& mat_source;
+  std::optional<std::reference_wrapper<comm::CommunicatorGrid>> comm_grid_ref = std::nullopt;
 
 public:
   /// Create a mirror of the source matrix @p mat_source. Creates a copy of the
@@ -115,9 +116,10 @@ public:
 
   /// Create a mirror of the source matrix @p mat_source with distribution @p dist.
   /// Creates a copy of the source matrix on the target device.
-  MatrixMirror(Matrix<const T, Source>& mat_source, const Distribution& dist)
-      : mat_target(dist), mat_source(mat_source) {
-    copy(mat_source, mat_target);
+  MatrixMirror(Matrix<const T, Source>& mat_source, const Distribution& dist,
+               comm::CommunicatorGrid& comm_grid)
+      : mat_target(dist), mat_source(mat_source), comm_grid_ref(comm_grid) {
+    copy(mat_source, mat_target, comm_grid_ref.value().get());
   }
 
   /// Release the target matrix.
@@ -145,6 +147,7 @@ public:
 template <class T, Device Target, Device Source>
 class MatrixMirror : public MatrixMirror<const T, Target, Source> {
   using base_type = MatrixMirror<const T, Target, Source>;
+  using base_type::comm_grid_ref;
   using base_type::mat_target;
   Matrix<T, Source>& mat_source;
 
@@ -155,8 +158,9 @@ public:
 
   /// Create a mirror of the source matrix @p mat_source with distribution @p dist.
   /// Creates a copy of the source matrix on the target device.
-  MatrixMirror(Matrix<T, Source>& mat_source, const Distribution& dist)
-      : base_type(mat_source, dist), mat_source(mat_source) {}
+  MatrixMirror(Matrix<T, Source>& mat_source, const Distribution& dist,
+               comm::CommunicatorGrid& comm_grid)
+      : base_type(mat_source, dist, comm_grid), mat_source(mat_source) {}
 
   /// Copy the target matrix back to the source matrix and release the target
   /// matrix.
@@ -176,12 +180,22 @@ public:
 
   /// Copies the source to the target matrix.
   void copySourceToTarget() {
-    copy(mat_source, mat_target);
+    if (comm_grid_ref.has_value()) {
+      copy(mat_source, mat_target, comm_grid_ref.value().get());
+    }
+    else {
+      copy(mat_source, mat_target);
+    }
   }
 
   /// Copies the target to the source matrix.
   void copyTargetToSource() {
-    copy(mat_target, mat_source);
+    if (comm_grid_ref.has_value()) {
+      copy(mat_target, mat_source, comm_grid_ref.value().get());
+    }
+    else {
+      copy(mat_target, mat_source);
+    }
   }
 };
 

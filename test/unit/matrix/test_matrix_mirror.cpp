@@ -59,10 +59,10 @@ const std::vector<TestSizes> sizes_tests({
 struct TestRedistributionSizes {
   GlobalElementSize size;
   // Block and tile sizes of the source matrix
-  TileElementSize block_size;
+  GlobalElementSize block_size;
   TileElementSize tile_size;
   // Block and tile sizes of the mirror matrix
-  TileElementSize block_size_mirror;
+  GlobalElementSize block_size_mirror;
   TileElementSize tile_size_mirror;
 };
 
@@ -350,7 +350,7 @@ TYPED_TEST(MatrixMirrorTest, DifferentDevicesDifferentMemory) {
 }
 
 template <typename T, Device Target, Device Source>
-void basicTestRedistribution(const CommunicatorGrid& comm_grid, const TestRedistributionSizes& test) {
+void basicTestRedistribution(CommunicatorGrid& comm_grid, const TestRedistributionSizes& test) {
   Distribution dist(test.size, test.block_size, test.tile_size, comm_grid.size(), comm_grid.rank(),
                     {0, 0});
   Distribution dist_m(test.size, test.block_size_mirror, test.tile_size_mirror, comm_grid.size(),
@@ -359,7 +359,7 @@ void basicTestRedistribution(const CommunicatorGrid& comm_grid, const TestRedist
   Matrix<T, Source> mat(dist);
 
   {
-    MatrixMirror<T, Target, Source> mat_mirror(mat, dist_m);
+    MatrixMirror<T, Target, Source> mat_mirror(mat, dist_m, comm_grid);
     EXPECT_EQ(mat_mirror.get().distribution(), dist_m);
   }
 
