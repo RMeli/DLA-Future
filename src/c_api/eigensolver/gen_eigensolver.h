@@ -18,7 +18,9 @@
 #include <dlaf/blas/enum_parse.h>
 #include <dlaf/common/assert.h>
 #include <dlaf/eigensolver/gen_eigensolver.h>
+#include <dlaf/matrix/copy.h>
 #include <dlaf/matrix/create_matrix.h>
+#include <dlaf/matrix/distribution.h>
 #include <dlaf/matrix/matrix.h>
 #include <dlaf/matrix/matrix_mirror.h>
 #include <dlaf/types.h>
@@ -33,7 +35,7 @@ int hermitian_generalized_eigensolver(
     const DLAF_descriptor dlaf_descb, dlaf::BaseType<T>* w, T* z, const DLAF_descriptor dlaf_descz,
     const SizeType eigenvalues_index_begin, const SizeType eigenvalues_index_end, bool factorized) {
   using MatrixHost = dlaf::matrix::Matrix<T, dlaf::Device::CPU>;
-  using MatrixMirror = dlaf::matrix::MatrixMirror<T, dlaf::Device::Default, dlaf::Device::CPU>;
+  using MatrixDevice = dlaf::matrix::Matrix<T, dlaf::Device::Default>;
   using MatrixBaseMirror =
       dlaf::matrix::MatrixMirror<dlaf::BaseType<T>, dlaf::Device::Default, dlaf::Device::CPU>;
 
@@ -59,23 +61,41 @@ int hermitian_generalized_eigensolver(
       {dlaf_descz.m, 1}, {dlaf_descz.mb, 1}, std::max(dlaf_descz.m, 1), w);
 
   {
-    MatrixMirror matrix_a(matrix_host_a);
-    MatrixMirror matrix_b(matrix_host_b);
-    MatrixMirror eigenvectors(eigenvectors_host);
+    constexpr SizeType device_block_size = 1024; // TODO: get from environment variable or tune parameters
+
+    const auto& dist_host = matrix_host_a.distribution();
+    const dlaf::GlobalElementSize matrix_size = dist_host.size();
+    const dlaf::TileElementSize tile_size(
+        std::min(device_block_size, matrix_size.rows()),
+        std::min(device_block_size, matrix_size.cols()));
+
+    dlaf::matrix::Distribution dist_device(matrix_size, tile_size, dist_host.grid_size(),
+                                           dist_host.rank_index(), dist_host.source_rank_index());
+    MatrixDevice matrix_device_a(dist_device);
+    MatrixDevice matrix_device_b(dist_device);
+    MatrixDevice eigenvectors_device(dist_device);
+
+    // Copy data from host to "device", while performing redistribution
+    dlaf::matrix::copy(matrix_host_a, matrix_device_a, communicator_grid);
+    dlaf::matrix::copy(matrix_host_b, matrix_device_b, communicator_grid);
+
     MatrixBaseMirror eigenvalues(eigenvalues_host);
 
     if (!factorized) {
       dlaf::hermitian_generalized_eigensolver<dlaf::Backend::Default, dlaf::Device::Default, T>(
-          communicator_grid, dlaf::internal::char2uplo(uplo), matrix_a.get(), matrix_b.get(),
-          eigenvalues.get(), eigenvectors.get(), eigenvalues_index_begin, eigenvalues_index_end);
+          communicator_grid, dlaf::internal::char2uplo(uplo), matrix_device_a, matrix_device_b,
+          eigenvalues.get(), eigenvectors_device, eigenvalues_index_begin, eigenvalues_index_end);
     }
     else {
       dlaf::hermitian_generalized_eigensolver_factorized<dlaf::Backend::Default, dlaf::Device::Default,
                                                          T>(
-          communicator_grid, dlaf::internal::char2uplo(uplo), matrix_a.get(), matrix_b.get(),
-          eigenvalues.get(), eigenvectors.get(), eigenvalues_index_begin, eigenvalues_index_end);
+          communicator_grid, dlaf::internal::char2uplo(uplo), matrix_device_a, matrix_device_b,
+          eigenvalues.get(), eigenvectors_device, eigenvalues_index_begin, eigenvalues_index_end);
     }
-  }  // Destroy mirror
+
+    // Copy data from "device" to host, back to the original distribution
+    dlaf::matrix::copy(eigenvectors_device, eigenvectors_host, communicator_grid);
+  }
 
   // Ensure data is copied back to the host
   eigenvalues_host.waitLocalTiles();

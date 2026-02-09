@@ -18,7 +18,9 @@
 #include <dlaf/blas/enum_parse.h>
 #include <dlaf/common/assert.h>
 #include <dlaf/eigensolver/eigensolver.h>
+#include <dlaf/matrix/copy.h>
 #include <dlaf/matrix/create_matrix.h>
+#include <dlaf/matrix/distribution.h>
 #include <dlaf/matrix/matrix.h>
 #include <dlaf/matrix/matrix_mirror.h>
 #include <dlaf/types.h>
@@ -33,7 +35,7 @@ int hermitian_eigensolver(const int dlaf_context, const char uplo, T* a,
                           const DLAF_descriptor dlaf_descz, SizeType eigenvalues_index_begin,
                           SizeType eigenvalues_index_end) {
   using MatrixHost = dlaf::matrix::Matrix<T, dlaf::Device::CPU>;
-  using MatrixMirror = dlaf::matrix::MatrixMirror<T, dlaf::Device::Default, dlaf::Device::CPU>;
+  using MatrixDevice = dlaf::matrix::Matrix<T, dlaf::Device::Default>;
   using MatrixBaseMirror =
       dlaf::matrix::MatrixMirror<dlaf::BaseType<T>, dlaf::Device::Default, dlaf::Device::CPU>;
 
@@ -55,14 +57,31 @@ int hermitian_eigensolver(const int dlaf_context, const char uplo, T* a,
       {dlaf_descz.m, 1}, {dlaf_descz.mb, 1}, std::max(dlaf_descz.m, 1), w);
 
   {
-    MatrixMirror matrix(matrix_host);
-    MatrixMirror eigenvectors(eigenvectors_host);
+    constexpr SizeType device_block_size = 1024; // TODO: get from environment variable or tune parameters
+
+    const auto& dist_host = matrix_host.distribution();
+    const dlaf::GlobalElementSize matrix_size = dist_host.size();
+    const dlaf::TileElementSize tile_size(
+        std::min(device_block_size, matrix_size.rows()),
+        std::min(device_block_size, matrix_size.cols()));
+
+    dlaf::matrix::Distribution dist_device(matrix_size, tile_size, dist_host.grid_size(),
+                                           dist_host.rank_index(), dist_host.source_rank_index());
+    MatrixDevice matrix_device(dist_device);
+    MatrixDevice eigenvectors_device(dist_device);
+
+    // Copy data from host to "device", while performing redistribution
+    dlaf::matrix::copy(matrix_host, matrix_device, communicator_grid);
+
     MatrixBaseMirror eigenvalues(eigenvalues_host);
 
     dlaf::hermitian_eigensolver<dlaf::Backend::Default, dlaf::Device::Default, T>(
-        communicator_grid, dlaf::internal::char2uplo(uplo), matrix.get(), eigenvalues.get(),
-        eigenvectors.get(), eigenvalues_index_begin, eigenvalues_index_end);
-  }  // Destroy mirror
+        communicator_grid, dlaf::internal::char2uplo(uplo), matrix_device, eigenvalues.get(),
+        eigenvectors_device, eigenvalues_index_begin, eigenvalues_index_end);
+
+    // Copy data from "device" to host, back to the original distribution
+    dlaf::matrix::copy(eigenvectors_device, eigenvectors_host, communicator_grid);
+  }
 
   // Ensure data is copied back to the host
   eigenvalues_host.waitLocalTiles();
