@@ -8,6 +8,7 @@
 // SPDX-License-Identifier: BSD-3-Clause
 //
 
+#include <cstdlib>
 #include <exception>
 #include <iostream>
 #include <optional>
@@ -66,4 +67,24 @@ dlaf::comm::CommunicatorGrid& grid_from_context(int dlaf_context) {
 
     std::terminate();
   }
+}
+
+std::optional<SizeType> get_eigensolver_device_block_size() {
+  if (const char* env_value = std::getenv("DLAF_EIGENSOLVER_BLOCK_SIZE")) {
+    try {
+      long value = std::stol(env_value);
+      if (value > 0) {
+        return static_cast<SizeType>(value);
+      }
+      else {
+        std::cerr << "[WARNING] DLAF_EIGENSOLVER_BLOCK_SIZE must be positive, ignoring.\n";
+      }
+    }
+    catch (const std::exception& e) {
+      std::cerr << "[WARNING] Invalid value for DLAF_EIGENSOLVER_BLOCK_SIZE: '" << env_value
+                << "', ignoring.\n";
+    }
+  }
+
+  return std::nullopt;
 }
