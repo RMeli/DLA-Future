@@ -107,34 +107,35 @@ int hermitian_generalized_eigensolver(
       // Copy eigenvectors from "device" to host, back to the original distribution
       dlaf::matrix::copy(eigenvectors_device, eigenvectors_host, communicator_grid);
 
-      // Copy eigenvalues from device to host, changing block size
-      dlaf::matrix::copy(eigenvalues_device, eigenvalues_host, communicator_grid);
+      // Copy eigenvalues from device to host (local, no redistribution needed)
+      dlaf::matrix::copy(eigenvalues_device, eigenvalues_host);
 
       // Wait for copies to complete before device matrices are destroyed
       eigenvalues_host.waitLocalTiles();
       eigenvectors_host.waitLocalTiles();
     }
-    else {
-      // Use MatrixMirror (no redistribution needed)
-      using MatrixMirror = dlaf::matrix::MatrixMirror<T, dlaf::Device::Default, dlaf::Device::CPU>;
-      MatrixBaseMirror eigenvalues(eigenvalues_host);
-      MatrixMirror matrix_a(matrix_host_a);
-      MatrixMirror matrix_b(matrix_host_b);
-      MatrixMirror eigenvectors(eigenvectors_host);
+    else { // No redistribution needed, use MatrixMirror to avoid extra copy
+      {
+        using MatrixMirror = dlaf::matrix::MatrixMirror<T, dlaf::Device::Default, dlaf::Device::CPU>;
 
-      if (!factorized) {
-        dlaf::hermitian_generalized_eigensolver<dlaf::Backend::Default, dlaf::Device::Default, T>(
-            communicator_grid, dlaf::internal::char2uplo(uplo), matrix_a.get(), matrix_b.get(),
-            eigenvalues.get(), eigenvectors.get(), eigenvalues_index_begin, eigenvalues_index_end);
-      }
-      else {
-        dlaf::hermitian_generalized_eigensolver_factorized<dlaf::Backend::Default, dlaf::Device::Default,
-                                                           T>(
-            communicator_grid, dlaf::internal::char2uplo(uplo), matrix_a.get(), matrix_b.get(),
-            eigenvalues.get(), eigenvectors.get(), eigenvalues_index_begin, eigenvalues_index_end);
+        MatrixBaseMirror eigenvalues(eigenvalues_host);
+        MatrixMirror matrix_a(matrix_host_a);
+        MatrixMirror matrix_b(matrix_host_b);
+        MatrixMirror eigenvectors(eigenvectors_host);
+
+        if (!factorized) {
+          dlaf::hermitian_generalized_eigensolver<dlaf::Backend::Default, dlaf::Device::Default, T>(
+              communicator_grid, dlaf::internal::char2uplo(uplo), matrix_a.get(), matrix_b.get(),
+              eigenvalues.get(), eigenvectors.get(), eigenvalues_index_begin, eigenvalues_index_end);
+        }
+        else {
+          dlaf::hermitian_generalized_eigensolver_factorized<dlaf::Backend::Default,
+                                                             dlaf::Device::Default, T>(
+              communicator_grid, dlaf::internal::char2uplo(uplo), matrix_a.get(), matrix_b.get(),
+              eigenvalues.get(), eigenvectors.get(), eigenvalues_index_begin, eigenvalues_index_end);
+        }
       }
 
-      // Wait for MatrixMirror to copy data back
       eigenvalues_host.waitLocalTiles();
       eigenvectors_host.waitLocalTiles();
     }

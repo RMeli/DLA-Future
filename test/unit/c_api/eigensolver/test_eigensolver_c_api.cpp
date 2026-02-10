@@ -9,6 +9,7 @@
 //
 
 #include <complex>
+#include <cstdlib>
 #include <optional>
 #include <set>
 #include <tuple>
@@ -260,6 +261,36 @@ TYPED_TEST(EigensolverTestCapi, CorrectnessDistributedDLAF) {
 
     c_api_test_finalize<API::dlaf>(dlaf_context);
   }
+}
+
+// Test sizes compatible with DLAF_EIGENSOLVER_BLOCK_SIZE=16 redistribution.
+// device_tile = min(16, m), and max(device_tile, mb) % min(device_tile, mb) == 0.
+const std::vector<std::tuple<SizeType, SizeType>> redistribution_sizes = {
+    // {m, mb}
+    {0, 2},     // m = 0 (no-op)
+    {32, 8},    // device_tile=16, host_mb=8, 16 % 8 == 0
+    {32, 4},    // device_tile=16, host_mb=4, 16 % 4 == 0
+    {34, 8},    // device_tile=16, host_mb=8, partial tiles
+    {32, 32},   // device_tile=16, host_mb=32, 32 % 16 == 0 (mb > device_tile)
+};
+
+TYPED_TEST(EigensolverTestCapi, CorrectnessDistributedDLAFWithRedistribution) {
+  setenv("DLAF_EIGENSOLVER_BLOCK_SIZE", "16", 1);
+
+  for (comm::CommunicatorGrid& grid : this->commGrids()) {
+    auto dlaf_context =
+        c_api_test_initialize<API::dlaf>(pika_argc, pika_argv, dlaf_argc, dlaf_argv, grid);
+
+    for (auto uplo : blas_uplos) {
+      for (auto [m, mb] : redistribution_sizes) {
+        testEigensolver<TypeParam, API::dlaf>(dlaf_context, uplo, m, mb, grid, std::nullopt);
+      }
+    }
+
+    c_api_test_finalize<API::dlaf>(dlaf_context);
+  }
+
+  unsetenv("DLAF_EIGENSOLVER_BLOCK_SIZE");
 }
 
 #ifdef DLAF_WITH_SCALAPACK

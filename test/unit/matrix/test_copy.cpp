@@ -306,3 +306,71 @@ TYPED_TEST(MatrixCopyTest, SubMatrixGPUDistributed) {
   }
 }
 #endif
+
+struct LocalReblockCopyConfig {
+  GlobalElementSize size;
+  TileElementSize tile_size_src;
+  TileElementSize tile_size_dst;
+};
+
+const std::vector<LocalReblockCopyConfig> local_reblock_tests({
+    // Same tile size (fast path)
+    {{10, 10}, {5, 5}, {5, 5}},
+    // dst tile size is a multiple of src tile size
+    {{12, 12}, {3, 3}, {6, 6}},
+    // src tile size is a multiple of dst tile size
+    {{12, 12}, {6, 6}, {3, 3}},
+    // Non-square tiles
+    {{12, 18}, {4, 6}, {2, 3}},
+    {{12, 18}, {2, 3}, {4, 6}},
+    // Non-square matrix
+    {{15, 6}, {5, 3}, {15, 6}},
+    {{15, 6}, {15, 6}, {5, 3}},
+    // Tile size larger than matrix (tile gets clamped by matrix size)
+    {{3, 3}, {3, 3}, {6, 6}},
+    // 1D-like matrices (single column) - using compatible tile sizes
+    {{10, 1}, {5, 1}, {10, 1}},
+    {{10, 1}, {10, 1}, {5, 1}},
+});
+
+TYPED_TEST(MatrixCopyTest, LocalReblockCPU) {
+  using dlaf::matrix::util::set;
+
+  for (const auto& test : local_reblock_tests) {
+    Matrix<TypeParam, Device::CPU> mat_src(test.size, test.tile_size_src);
+    set(mat_src, inputValues<TypeParam>);
+    Matrix<const TypeParam, Device::CPU> mat_src_const = std::move(mat_src);
+
+    Matrix<TypeParam, Device::CPU> mat_dst(test.size, test.tile_size_dst);
+    set(mat_dst, outputValues<TypeParam>);
+
+    copy(mat_src_const, mat_dst);
+
+    CHECK_MATRIX_NEAR(inputValues<TypeParam>, mat_dst, 0, TypeUtilities<TypeParam>::error);
+  }
+}
+
+#if DLAF_WITH_GPU
+TYPED_TEST(MatrixCopyTest, LocalReblockGPU) {
+  using dlaf::matrix::util::set;
+
+  for (const auto& test : local_reblock_tests) {
+    Matrix<TypeParam, Device::CPU> mat_src(test.size, test.tile_size_src);
+    set(mat_src, inputValues<TypeParam>);
+    Matrix<const TypeParam, Device::CPU> mat_src_const = std::move(mat_src);
+
+    Matrix<TypeParam, Device::GPU> mat_gpu1(test.size, test.tile_size_src);
+    Matrix<TypeParam, Device::GPU> mat_gpu2(test.size, test.tile_size_dst);
+
+    Matrix<TypeParam, Device::CPU> mat_dst(test.size, test.tile_size_dst);
+    set(mat_dst, outputValues<TypeParam>);
+
+    // CPU (src tile size) -> GPU (src tile size) -> GPU (dst tile size) -> CPU (dst tile size)
+    copy(mat_src_const, mat_gpu1);
+    copy(mat_gpu1, mat_gpu2);
+    copy(mat_gpu2, mat_dst);
+
+    CHECK_MATRIX_NEAR(inputValues<TypeParam>, mat_dst, 0, TypeUtilities<TypeParam>::error);
+  }
+}
+#endif
