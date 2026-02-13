@@ -37,6 +37,7 @@ DLAF_addMiniapp(miniapp_gen_eigensolver SOURCES miniapp_gen_eigensolver.cpp)
 DLAF_addMiniapp(miniapp_communication SOURCES miniapp_communication.cpp)
 DLAF_addMiniapp(miniapp_triangular_inverse SOURCES miniapp_triangular_inverse.cpp)
 DLAF_addMiniapp(miniapp_inverse_from_cholesky_factor SOURCES miniapp_inverse_from_cholesky_factor.cpp)
+DLAF_addMiniapp(miniapp_redistribution SOURCES miniapp_redistribution.cpp)
 
 if(DLAF_BUILD_TESTING)
   set(miniapp_test_args
@@ -65,6 +66,7 @@ if(DLAF_BUILD_TESTING)
   DLAF_addTargetTest(miniapp_communication ${miniapp_test_args})
   DLAF_addTargetTest(miniapp_triangular_inverse ${miniapp_test_args})
   DLAF_addTargetTest(miniapp_inverse_from_cholesky_factor ${miniapp_test_args})
+  DLAF_addTargetTest(miniapp_redistribution ${miniapp_test_args})
 endif()
 
 add_subdirectory(kernel)
