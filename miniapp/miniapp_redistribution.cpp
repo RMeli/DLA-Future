@@ -75,7 +75,7 @@ struct RedistributionMiniapp {
     CommunicatorGrid comm_grid(world, opts.grid_rows, opts.grid_cols, Ordering::ColumnMajor);
 
     // Create random reference matrix on the host
-    ConstHostMatrixType matrix_ref = [&matrix_size, &block_size_src, &comm_grid]() {
+    ConstHostMatrixType matrix_ref = [&comm_grid, &opts]() {
       const GlobalElementSize matrix_size(opts.m, opts.m);
       const TileElementSize block_size_src(opts.mb, opts.mb);
 
