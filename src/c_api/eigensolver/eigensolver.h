@@ -41,7 +41,7 @@ int hermitian_eigensolver(const int dlaf_context, const char uplo, T* a,
   DLAF_ASSERT(dlaf_descz.i == 0, dlaf_descz.i);
   DLAF_ASSERT(dlaf_descz.j == 0, dlaf_descz.j);
 
-  pika::resume();
+  PikaScope pika_scope;
 
   auto& communicator_grid = grid_from_context(dlaf_context);
 
@@ -90,7 +90,6 @@ int hermitian_eigensolver(const int dlaf_context, const char uplo, T* a,
   eigenvalues_host.waitLocalTiles();
   eigenvectors_host.waitLocalTiles();
 
-  pika::suspend();
   return 0;
 }
 

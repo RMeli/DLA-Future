@@ -43,7 +43,7 @@ int hermitian_generalized_eigensolver(
   DLAF_ASSERT(dlaf_descz.i == 0, dlaf_descz.i);
   DLAF_ASSERT(dlaf_descz.j == 0, dlaf_descz.j);
 
-  pika::resume();
+  PikaScope pika_scope;
 
   auto& communicator_grid = grid_from_context(dlaf_context);
 
@@ -78,6 +78,9 @@ int hermitian_generalized_eigensolver(
       dlaf::hermitian_generalized_eigensolver<dlaf::Backend::Default, dlaf::Device::Default, T>(
           communicator_grid, dlaf::internal::char2uplo(uplo), matrix_device_a, matrix_device_b,
           eigenvalues_device, eigenvectors_device, eigenvalues_index_begin, eigenvalues_index_end);
+    
+      // Copy back Cholesky factorization
+      dlaf::matrix::copy(matrix_device_b, matrix_host_b, communicator_grid);
     }
     else {
       dlaf::hermitian_generalized_eigensolver_factorized<dlaf::Backend::Default, dlaf::Device::Default,
@@ -116,7 +119,6 @@ int hermitian_generalized_eigensolver(
   eigenvalues_host.waitLocalTiles();
   eigenvectors_host.waitLocalTiles();
 
-  pika::suspend();
   return 0;
 }
 

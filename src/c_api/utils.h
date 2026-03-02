@@ -35,3 +35,12 @@ std::optional<SizeType> get_internal_block_size();
 /// but with the block size from DLAF_INTERNAL_BLOCK_SIZE.
 std::optional<dlaf::matrix::Distribution> get_device_distribution(
     const dlaf::matrix::Distribution& dist_host);
+
+struct PikaScope{
+    PikaScope() {
+        pika::resume();
+    }
+    ~PikaScope() {
+        pika::stop();
+    }
+};
