@@ -311,4 +311,23 @@ TYPED_TEST(EigensolverTestCapi, CorrectnessDistributedScalapack) {
     c_api_test_finalize<API::scalapack>(dlaf_context);
   }
 }
+
+TYPED_TEST(EigensolverTestCapi, CorrectnessDistributedScalapackWithRedistribution) {
+  setenv("DLAF_INTERNAL_BLOCK_SIZE", "16", 1);
+
+  for (comm::CommunicatorGrid& grid : this->commGrids()) {
+    auto dlaf_context =
+        c_api_test_initialize<API::scalapack>(pika_argc, pika_argv, dlaf_argc, dlaf_argv, grid);
+
+    for (auto uplo : blas_uplos) {
+      for (auto [m, mb] : redistribution_sizes) {
+        testEigensolver<TypeParam, API::scalapack>(dlaf_context, uplo, m, mb, grid, std::nullopt);
+      }
+    }
+
+    c_api_test_finalize<API::scalapack>(dlaf_context);
+  }
+
+  unsetenv("DLAF_INTERNAL_BLOCK_SIZE");
+}
 #endif

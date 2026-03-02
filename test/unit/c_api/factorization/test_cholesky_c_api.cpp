@@ -9,6 +9,7 @@
 //
 
 #include <complex>
+#include <cstdlib>
 #include <tuple>
 #include <typeinfo>
 #include <utility>
@@ -157,6 +158,31 @@ TYPED_TEST(CholeskyTestCapi, CorrectnessDistributedDLAF) {
   }
 }
 
+// Test sizes compatible with DLAF_INTERNAL_BLOCK_SIZE=16 redistribution.
+// device_tile = min(16, m), and max(device_tile, mb) % min(device_tile, mb) == 0.
+const std::vector<std::tuple<SizeType, SizeType>> redistribution_sizes = {
+    // {m, mb}
+    {0, 2},     // m = 0 (no-op)
+    {32, 8},    // device_tile=16, host_mb=8, 16 % 8 == 0
+    {32, 4},    // device_tile=16, host_mb=4, 16 % 4 == 0
+    {34, 8},    // device_tile=16, host_mb=8, partial tiles
+    {32, 32},   // device_tile=16, host_mb=32, 32 % 16 == 0 (mb > device_tile)
+};
+
+TYPED_TEST(CholeskyTestCapi, CorrectnessDistributedDLAFWithRedistribution) {
+  setenv("DLAF_INTERNAL_BLOCK_SIZE", "16", 1);
+
+  for (auto& grid : this->commGrids()) {
+    for (auto uplo : blas_uplos) {
+      for (const auto& [m, mb] : redistribution_sizes) {
+        testCholesky<TypeParam, API::dlaf>(grid, uplo, m, mb);
+      }
+    }
+  }
+
+  unsetenv("DLAF_INTERNAL_BLOCK_SIZE");
+}
+
 #ifdef DLAF_WITH_SCALAPACK
 TYPED_TEST(CholeskyTestCapi, CorrectnessDistributedScaLAPACK) {
   for (auto& grid : this->commGrids()) {
@@ -166,5 +192,19 @@ TYPED_TEST(CholeskyTestCapi, CorrectnessDistributedScaLAPACK) {
       }
     }
   }
+}
+
+TYPED_TEST(CholeskyTestCapi, CorrectnessDistributedScaLAPACKWithRedistribution) {
+  setenv("DLAF_INTERNAL_BLOCK_SIZE", "16", 1);
+
+  for (auto& grid : this->commGrids()) {
+    for (auto uplo : blas_uplos) {
+      for (const auto& [m, mb] : redistribution_sizes) {
+        testCholesky<TypeParam, API::scalapack>(grid, uplo, m, mb);
+      }
+    }
+  }
+
+  unsetenv("DLAF_INTERNAL_BLOCK_SIZE");
 }
 #endif
