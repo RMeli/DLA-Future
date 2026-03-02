@@ -59,7 +59,7 @@ int hermitian_eigensolver(const int dlaf_context, const char uplo, T* a,
   const auto& dist_host = matrix_host.distribution();
   const dlaf::GlobalElementSize matrix_size = matrix_host.size();
 
-  const auto opt_device_block_size = get_eigensolver_device_block_size();
+  const auto opt_device_block_size = get_internal_block_size();
   const bool needs_redistribution =
       opt_device_block_size.has_value() && !matrix_size.isEmpty() &&
       (dist_host.block_size().rows() != *opt_device_block_size ||

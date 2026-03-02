@@ -24,6 +24,6 @@ dlaf::common::Ordering char2order(const char order);
 
 dlaf::comm::CommunicatorGrid& grid_from_context(int dlaf_context);
 
-/// Returns the block size to use for device matrices in eigensolvers.
-/// Reads from DLAF_EIGENSOLVER_BLOCK_SIZE environment variable, returns std::nullopt if not set.
-std::optional<SizeType> get_eigensolver_device_block_size();
+/// Returns the block size to use for device matrices in DLA-Future C API solvers.
+/// Reads from DLAF_INTERNAL_BLOCK_SIZE environment variable, returns std::nullopt if not set.
+std::optional<SizeType> get_internal_block_size();
