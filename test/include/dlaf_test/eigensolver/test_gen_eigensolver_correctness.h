@@ -35,7 +35,9 @@ template <class T, Device D, class... GridIfDistributed>
 void testGenEigensolverCorrectness(const blas::Uplo uplo, Matrix<const T, Device::CPU>& reference_a,
                                    Matrix<const T, Device::CPU>& reference_b,
                                    dlaf::EigensolverResult<T, D>& ret, SizeType eval_index_begin,
-                                   SizeType eval_index_end, GridIfDistributed&... grid) {
+                                   SizeType eval_index_end,
+                                   Matrix<const T, Device::CPU>& mat_b_chol,
+                                   GridIfDistributed&... grid) {
   using dlaf::matrix::MatrixMirror;
   using dlaf::matrix::test::allGather;
   using dlaf::matrix::test::MatrixLocal;
@@ -111,6 +113,35 @@ void testGenEigensolverCorrectness(const blas::Uplo uplo, Matrix<const T, Device
 
   // Check A E == Lambda E
   CHECK_MATRIX_NEAR(mat_be_local, workspace2, m * TypeUtilities<T>::error, m * TypeUtilities<T>::error);
+
+  // Check that mat_b_chol contains the Cholesky factor of reference_b:
+  // For Lower uplo: verify L * L^H == B, for Upper: verify U^H * U == B
+  {
+    auto mat_l_local = allGather<T>(uplo, mat_b_chol, grid...);
+
+    // Zero out the non-triangular part, which may be uninitialized
+    for (SizeType j = 0; j < m; ++j) {
+      if (uplo == blas::Uplo::Lower) {
+        for (SizeType i = 0; i < j; ++i)
+          mat_l_local({i, j}) = T{0};
+      }
+      else {
+        for (SizeType i = j + 1; i < m; ++i)
+          mat_l_local({i, j}) = T{0};
+      }
+    }
+
+    // Compute L * L^H (Lower) or U^H * U (Upper)
+    const blas::Op op_a = (uplo == blas::Uplo::Lower) ? blas::Op::NoTrans : blas::Op::ConjTrans;
+    const blas::Op op_b = (uplo == blas::Uplo::Lower) ? blas::Op::ConjTrans : blas::Op::NoTrans;
+
+    MatrixLocal<T> b_check({m, m}, reference_a.blockSize());
+    blas::gemm(blas::Layout::ColMajor, op_a, op_b, m, m, m, T{1}, mat_l_local.ptr(),
+               mat_l_local.ld(), mat_l_local.ptr(), mat_l_local.ld(), T{0}, b_check.ptr(),
+               b_check.ld());
+
+    CHECK_MATRIX_NEAR(mat_b_local, b_check, m * TypeUtilities<T>::error, m * TypeUtilities<T>::error);
+  }
 }
 
 }
