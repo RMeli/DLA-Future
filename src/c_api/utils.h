@@ -41,6 +41,6 @@ struct PikaScope{
         pika::resume();
     }
     ~PikaScope() {
-        pika::stop();
+        pika::suspend();
     }
 };
