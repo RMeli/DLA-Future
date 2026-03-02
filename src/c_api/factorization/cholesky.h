@@ -21,7 +21,6 @@
 #include <dlaf/blas/enum_parse.h>
 #include <dlaf/factorization/cholesky.h>
 #include <dlaf/matrix/copy.h>
-#include <dlaf/matrix/distribution.h>
 #include <dlaf/matrix/matrix.h>
 #include <dlaf/matrix/matrix_mirror.h>
 #include <dlaf_c/desc.h>
@@ -49,23 +48,10 @@ int cholesky_factorization(const int dlaf_context, const char uplo, T* a,
 
   MatrixHost matrix_host(layout, a);
 
-  const auto& dist_host = matrix_host.distribution();
-  const dlaf::GlobalElementSize matrix_size = matrix_host.size();
+  const auto opt_dist_device = get_device_distribution(matrix_host.distribution());
 
-  const auto opt_device_block_size = get_internal_block_size();
-  const bool needs_redistribution =
-      opt_device_block_size.has_value() && !matrix_size.isEmpty() &&
-      (dist_host.block_size().rows() != *opt_device_block_size ||
-       dist_host.block_size().cols() != *opt_device_block_size);
-
-  if (needs_redistribution) {
-    const SizeType device_block_size = *opt_device_block_size;
-    const dlaf::TileElementSize tile_size(std::min(device_block_size, matrix_size.rows()),
-                                          std::min(device_block_size, matrix_size.cols()));
-
-    dlaf::matrix::Distribution dist_device(matrix_size, tile_size, dist_host.grid_size(),
-                                           dist_host.rank_index(), dist_host.source_rank_index());
-    MatrixDevice matrix_device(dist_device);
+  if (opt_dist_device) {
+    MatrixDevice matrix_device(*opt_dist_device);
 
     dlaf::matrix::copy(matrix_host, matrix_device, communicator_grid);
 
@@ -73,19 +59,16 @@ int cholesky_factorization(const int dlaf_context, const char uplo, T* a,
         communicator_grid, dlaf::internal::char2uplo(uplo), matrix_device);
 
     dlaf::matrix::copy(matrix_device, matrix_host, communicator_grid);
-
-    matrix_host.waitLocalTiles();
   }
   else {  // No redistribution needed, use MatrixMirror to avoid extra copy
-    {
       MatrixMirror matrix(matrix_host);
 
       dlaf::cholesky_factorization<dlaf::Backend::Default, dlaf::Device::Default, T>(
           communicator_grid, dlaf::internal::char2uplo(uplo), matrix.get());
-    }  // Destroy mirror
 
-    matrix_host.waitLocalTiles();
   }
+    
+  matrix_host.waitLocalTiles();
 
   pika::suspend();
 

@@ -20,7 +20,6 @@
 #include <dlaf/eigensolver/eigensolver.h>
 #include <dlaf/matrix/copy.h>
 #include <dlaf/matrix/create_matrix.h>
-#include <dlaf/matrix/distribution.h>
 #include <dlaf/matrix/matrix.h>
 #include <dlaf/matrix/matrix_mirror.h>
 #include <dlaf/types.h>
@@ -36,8 +35,6 @@ int hermitian_eigensolver(const int dlaf_context, const char uplo, T* a,
                           SizeType eigenvalues_index_end) {
   using MatrixHost = dlaf::matrix::Matrix<T, dlaf::Device::CPU>;
   using MatrixDevice = dlaf::matrix::Matrix<T, dlaf::Device::Default>;
-  using MatrixBaseMirror =
-      dlaf::matrix::MatrixMirror<dlaf::BaseType<T>, dlaf::Device::Default, dlaf::Device::CPU>;
 
   DLAF_ASSERT(dlaf_desca.i == 0, dlaf_desca.i);
   DLAF_ASSERT(dlaf_desca.j == 0, dlaf_desca.j);
@@ -56,31 +53,17 @@ int hermitian_eigensolver(const int dlaf_context, const char uplo, T* a,
   auto eigenvalues_host = dlaf::matrix::create_matrix_from_col_major<dlaf::Device::CPU>(
       {dlaf_descz.m, 1}, {dlaf_descz.mb, 1}, std::max(dlaf_descz.m, 1), w);
 
-  const auto& dist_host = matrix_host.distribution();
-  const dlaf::GlobalElementSize matrix_size = matrix_host.size();
+  const auto opt_dist_device = get_device_distribution(matrix_host.distribution());
 
-  const auto opt_device_block_size = get_internal_block_size();
-  const bool needs_redistribution =
-      opt_device_block_size.has_value() && !matrix_size.isEmpty() &&
-      (dist_host.block_size().rows() != *opt_device_block_size ||
-       dist_host.block_size().cols() != *opt_device_block_size);
-
-  if (needs_redistribution) {
-    const SizeType device_block_size = *opt_device_block_size;
-    const dlaf::TileElementSize tile_size(std::min(device_block_size, matrix_size.rows()),
-                                          std::min(device_block_size, matrix_size.cols()));
-
-    dlaf::matrix::Distribution dist_device(matrix_size, tile_size, dist_host.grid_size(),
-                                           dist_host.rank_index(), dist_host.source_rank_index());
-    MatrixDevice matrix_device(dist_device);
-    MatrixDevice eigenvectors_device(dist_device);
+  if (opt_dist_device) {
+    MatrixDevice matrix_device(*opt_dist_device);
+    MatrixDevice eigenvectors_device(*opt_dist_device);
 
     dlaf::matrix::copy(matrix_host, matrix_device, communicator_grid);
 
-    // Create eigenvalues on device with matching block size (local, non-distributed)
     using MatrixDeviceBase = dlaf::matrix::Matrix<dlaf::BaseType<T>, dlaf::Device::Default>;
-    const dlaf::GlobalElementSize eigenvalues_size(matrix_size.rows(), 1);
-    const dlaf::TileElementSize eigenvalues_tile_size(tile_size.rows(), 1);
+    const dlaf::GlobalElementSize eigenvalues_size(opt_dist_device->size().rows(), 1);
+    const dlaf::TileElementSize eigenvalues_tile_size(opt_dist_device->block_size().rows(), 1);
     MatrixDeviceBase eigenvalues_device(eigenvalues_size, eigenvalues_tile_size);
 
     dlaf::hermitian_eigensolver<dlaf::Backend::Default, dlaf::Device::Default, T>(
@@ -90,11 +73,9 @@ int hermitian_eigensolver(const int dlaf_context, const char uplo, T* a,
     dlaf::matrix::copy(eigenvectors_device, eigenvectors_host, communicator_grid);
     dlaf::matrix::copy(eigenvalues_device, eigenvalues_host);
 
-    eigenvalues_host.waitLocalTiles();
-    eigenvectors_host.waitLocalTiles();
   }
   else { // No redistribution needed, use MatrixMirror to avoid extra copy
-    {
+      using MatrixBaseMirror = dlaf::matrix::MatrixMirror<dlaf::BaseType<T>, dlaf::Device::Default, dlaf::Device::CPU>;
       using MatrixMirror = dlaf::matrix::MatrixMirror<T, dlaf::Device::Default, dlaf::Device::CPU>;
       
       MatrixBaseMirror eigenvalues(eigenvalues_host);
@@ -104,11 +85,10 @@ int hermitian_eigensolver(const int dlaf_context, const char uplo, T* a,
       dlaf::hermitian_eigensolver<dlaf::Backend::Default, dlaf::Device::Default, T>(
           communicator_grid, dlaf::internal::char2uplo(uplo), matrix.get(), eigenvalues.get(),
           eigenvectors.get(), eigenvalues_index_begin, eigenvalues_index_end);
-    }
-
-    eigenvalues_host.waitLocalTiles();
-    eigenvectors_host.waitLocalTiles();
   }
+  
+  eigenvalues_host.waitLocalTiles();
+  eigenvectors_host.waitLocalTiles();
 
   pika::suspend();
   return 0;
@@ -126,7 +106,7 @@ void pxheevd(const char uplo, const int m, T* a, const int ia, const int ja, con
   DLAF_ASSERT(ia == 1, ia);
   DLAF_ASSERT(ja == 1, ja);
   DLAF_ASSERT(iz == 1, iz);
-  DLAF_ASSERT(iz == 1, iz);
+  DLAF_ASSERT(jz == 1, jz);
   DLAF_ASSERT(m > 0 ? eigenvalues_index_begin >= 1 : eigenvalues_index_begin == 1, m,
               eigenvalues_index_begin);
   DLAF_ASSERT(m > 0 ? eigenvalues_index_end <= m : eigenvalues_index_end == 0, m, eigenvalues_index_end);

@@ -8,6 +8,7 @@
 // SPDX-License-Identifier: BSD-3-Clause
 //
 
+#include <algorithm>
 #include <cstdlib>
 #include <exception>
 #include <iostream>
@@ -87,4 +88,28 @@ std::optional<SizeType> get_internal_block_size() {
   }
 
   return std::nullopt;
+}
+
+std::optional<dlaf::matrix::Distribution> get_device_distribution(
+    const dlaf::matrix::Distribution& dist_host) {
+  const auto opt_block_size = get_internal_block_size();
+  
+  const dlaf::GlobalElementSize matrix_size = dist_host.size();
+
+  if (!opt_block_size.has_value() || matrix_size.isEmpty()){
+    return std::nullopt;
+  }
+
+  const SizeType device_block_size = *opt_block_size;
+
+  if (dist_host.block_size().rows() == device_block_size &&
+      dist_host.block_size().cols() == device_block_size){
+    return std::nullopt;
+}
+
+  const dlaf::TileElementSize tile_size(std::min(device_block_size, matrix_size.rows()),
+                                        std::min(device_block_size, matrix_size.cols()));
+
+  return dlaf::matrix::Distribution(matrix_size, tile_size, dist_host.grid_size(),
+                                    dist_host.rank_index(), dist_host.source_rank_index());
 }

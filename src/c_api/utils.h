@@ -27,3 +27,11 @@ dlaf::comm::CommunicatorGrid& grid_from_context(int dlaf_context);
 /// Returns the block size to use for device matrices in DLA-Future C API solvers.
 /// Reads from DLAF_INTERNAL_BLOCK_SIZE environment variable, returns std::nullopt if not set.
 std::optional<SizeType> get_internal_block_size();
+
+/// Returns the device matrix distribution if redistribution is needed, std::nullopt otherwise.
+///
+/// Redistribution is needed when DLAF_INTERNAL_BLOCK_SIZE is set and differs from the host
+/// block size. The returned distribution uses the same process grid and source rank as @p dist_host,
+/// but with the block size from DLAF_INTERNAL_BLOCK_SIZE.
+std::optional<dlaf::matrix::Distribution> get_device_distribution(
+    const dlaf::matrix::Distribution& dist_host);
