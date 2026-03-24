@@ -36,11 +36,17 @@ std::optional<SizeType> get_internal_block_size();
 std::optional<dlaf::matrix::Distribution> get_device_distribution(
     const dlaf::matrix::Distribution& dist_host);
 
-struct PikaScope{
-    PikaScope() {
-        pika::resume();
-    }
-    ~PikaScope() {
-        pika::suspend();
-    }
+struct [[nodiscard]] PikaRunningScope {
+  PikaRunningScope() {
+    pika::resume();
+  }
+
+  ~PikaRunningScope() {
+    pika::suspend();
+  }
+
+  PikaRunningScope(const PikaRunningScope&) = delete;
+  PikaRunningScope& operator=(const PikaRunningScope&) = delete;
+  PikaRunningScope(PikaRunningScope&&) = delete;
+  PikaRunningScope& operator=(PikaRunningScope&&) = delete;
 };

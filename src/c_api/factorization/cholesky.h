@@ -40,7 +40,7 @@ int cholesky_factorization(const int dlaf_context, const char uplo, T* a,
   DLAF_ASSERT(dlaf_desca.i == 0, dlaf_desca.i);
   DLAF_ASSERT(dlaf_desca.j == 0, dlaf_desca.j);
 
-  PikaScope pika_scope;
+  PikaRunningScope pika_scope;
 
   auto& communicator_grid = grid_from_context(dlaf_context);
 

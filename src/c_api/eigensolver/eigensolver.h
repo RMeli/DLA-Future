@@ -41,7 +41,7 @@ int hermitian_eigensolver(const int dlaf_context, const char uplo, T* a,
   DLAF_ASSERT(dlaf_descz.i == 0, dlaf_descz.i);
   DLAF_ASSERT(dlaf_descz.j == 0, dlaf_descz.j);
 
-  PikaScope pika_scope;
+  PikaRunningScope pika_scope;
 
   auto& communicator_grid = grid_from_context(dlaf_context);
 
